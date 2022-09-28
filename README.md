@@ -17,6 +17,8 @@ This installation guide should help you to install a multi-cluster setup of TAP 
 - Access to a domain registrar that can forward NS records to AWS Route53. I *highly* recommend domains.google.
 
 ## Installation instructions:
+1. Create a vSphere with Tanzu namespace called `tap-ns`. Give yourself proper permissions.
+2. If you're deploying to a prod environment, create a vSphere with Tanzu namespace called `tap-prod-ns` in that environment. Note that it can be the same environment for demo purposes if you have the capacity.
 run ./prepare-install-properties.sh and follow the instructions. In the end of the script you'll be asked to run ./install-all.sh. That's it!
 
 ## Call for action

@@ -1,0 +1,53 @@
+#@data/values
+---
+tanzunet:
+  username: username
+  password: password
+ingress:
+  domain: from-overlay
+  tap-gui-domain: view.mysite.com
+  contour_tls_namespace: tanzu-system-ingress
+  contour_tls_secret: contour-tls-delegation-cert
+aws:
+  region: eu-west-1
+  route_fifty_three_zone_id: from-overlay
+  credentials: # Note internal VMware users: CloudGate credentials will not have the necessary permissions to work
+    accessKey: key
+    secretKey: secret
+container_registry:
+  hostname: harbor.apps.iterate.mysite.com
+  username: username
+  password: password
+developer_namespace: demos
+acme:
+  email: user@gmail.com
+backstage:
+  authtoken: placeholder
+  github_token: g-tokensdfasdfasdf
+  openid:
+    url: https://dev-#########.okta.com/.well-known/openid-configuration
+    client_id: asdfasdfasdf
+    client_secret: asdfasdfasdfasdfasdfads
+    prompt: auto
+  s3:
+    bucket: my-bucket
+    accessKey: ADSFAFAFAFASFAF
+    secretKey: AFAFASFADFdfdsfasdfasdfasdfads
+gitops:
+  repo_name: tap-gitops
+  repo_owner: github-username
+  write_permissions_user: github-username
+  github_token: g-tokensdfasdfasdfasdfasdfasdf
+runclusters:
+  iterate:
+    url: placeholder
+    token: placeholder
+  test:
+    url: placeholder
+    token: placeholder
+  build:
+    url: placeholder
+    token: placeholder
+  prod:
+    url: placeholder
+    token: placeholder

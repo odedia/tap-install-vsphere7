@@ -1,0 +1,29 @@
+#@ load("@ytt:data", "data")
+---
+profile: run
+ceip_policy_disclosed: true # Installation fails if this is set to 'false'
+
+contour:
+  envoy:
+    service:
+      annotations:      
+        external-dns.alpha.kubernetes.io/hostname: #@ "*.{}".format(data.values.ingress.domain)
+      type: LoadBalancer
+
+cnrs:
+  domain_name: #@ "apps.{}".format(data.values.ingress.domain)
+  domain_template: "{{.Name}}-{{.Namespace}}.{{.Domain}}"
+  default_tls_secret: #@ "{}/cnr-{}".format(data.values.ingress.contour_tls_namespace,data.values.ingress.contour_tls_secret)
+
+appliveview:
+  ingressEnabled: true
+  ingressDomain: #@ data.values.ingress.domain
+
+appliveview_connector:
+  backend:
+    sslDisabled: "true"
+    host: #@ "appliveview.{}.format(data.values.ingress.tap-gui-domain)
+
+appsso:
+  domain_name: #@ "apps.{}".format(data.values.ingress.domain)
+  domain_template: "{{.Name}}-{{.Namespace}}.{{.Domain}}"

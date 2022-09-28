@@ -1,0 +1,18 @@
+generated/
+values.yaml
+tanzu-cluster-essentials/
+tanzu/
+backups/
+### IntelliJ IDEA ###
+.idea
+.DS_Store
+### VS Code ###
+.vscode/
+values-view.yaml
+values-test.yaml
+values-view-auth.yaml
+values-prod.yaml
+values-iterate.yaml
+*.tar
+*.tgz
+install-values.yaml

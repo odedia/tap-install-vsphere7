@@ -18,9 +18,20 @@ tanzu package repository get tanzu-tap-repository --namespace tap-install
 
 ytt -f tap-values-build.yaml -f values.yaml -f values-view.yaml --ignore-unknown-comments > generated/tap-values-build.yaml
 
+sed -r 's/supply_chain: testing_scanning/supply_chain: basic/' tap-values-build.yaml > generated/tap-values-build-basic-skeleton.yaml
+
+ytt -f generated/tap-values-build-basic-skeleton.yaml -f values.yaml -f values-view.yaml --ignore-unknown-comments > generated/tap-values-build-basic.yaml
+tanzu package installed update --install tap -p tap.tanzu.vmware.com -v $1 --values-file generated/tap-values-build-basic.yaml -n tap-install --poll-timeout 30m
+
+until [ `kubectl get clustersupplychain source-to-url  --ignore-not-found | wc -l | tr -d ' '` = "2" ]; do echo "Waiting for source-to-url supplychain to reconcile..."; sleep 5; done
+
+kubectl get clustersupplychain source-to-url -oyaml > generated/ootb-source-to-url.yaml
+
 tanzu package installed update --install tap -p tap.tanzu.vmware.com -v $1 --values-file generated/tap-values-build.yaml -n tap-install --poll-timeout 30m
 
-kubectl apply -f ./additional-config/ootb-source-to-url.yaml
+until [ `kubectl get clustersupplychain source-test-scan-to-url  --ignore-not-found | wc -l | tr -d ' '` = "2" ]; do echo "Waiting for source-test-scan-to-url supplychain to reconcile..."; sleep 5; done
+
+kubectl apply -f generated/ootb-source-to-url.yaml
 
 # configure developer namespace
 DEVELOPER_NAMESPACE=$(cat values.yaml  | grep developer_namespace | awk '/developer_namespace:/ {print $2}')

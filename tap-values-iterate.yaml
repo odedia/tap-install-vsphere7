@@ -48,3 +48,4 @@ appliveview_connector:
   backend:
     sslDisabled: "true"
     host: #@ "appliveview.view.{}".format(data.values.ingress.domain)
+    port: "80"

@@ -20,6 +20,8 @@ ytt -f tap-values-view.yaml -f values.yaml -f values-view.yaml -f run-cluster-bu
 
 tanzu package installed update --install tap -p tap.tanzu.vmware.com -v $1 --values-file generated/tap-values-view.yaml -n tap-install
 
+until [ `kubectl get ns metadata-store --ignore-not-found | wc -l | tr -d ' '` = "2" ]; do echo "Waiting for metadata-store namespace to be created..."; sleep 5; done
+
 # install external dns
 kubectl create ns tanzu-system-ingress
 ytt --ignore-unknown-comments -f values.yaml -f values-view.yaml -f ingress-config/ | kubectl apply -f-

@@ -6,6 +6,12 @@ export INSTALL_REGISTRY_HOSTNAME=registry.tanzu.vmware.com
 export INSTALL_REGISTRY_USERNAME=$(cat values.yaml | grep tanzunet -A 3 | awk '/username:/ {print $2}')
 export INSTALL_REGISTRY_PASSWORD=$(cat values.yaml  | grep tanzunet -A 3 | awk '/password:/ {print $2}')
 
+kubectl run  nginx --image=nginx --wait && kubectl wait pod nginx --for condition=Ready --timeout=90s
+kubectl exec -it nginx -- curl registry.tanzu.vmware.com
+kubectl exec -it nginx -- curl registry.tanzu.vmware.com
+kubectl exec -it nginx -- curl registry.tanzu.vmware.com
+kubectl delete pod nginx
+
 kubectl create ns tap-install
 tanzu secret registry add tap-registry \
   --username ${INSTALL_REGISTRY_USERNAME} --password ${INSTALL_REGISTRY_PASSWORD} \
@@ -36,6 +42,8 @@ kubectl apply -f generated/ootb-source-to-url.yaml
 # configure developer namespace
 DEVELOPER_NAMESPACE=$(cat values.yaml  | grep developer_namespace | awk '/developer_namespace:/ {print $2}')
 kubectl create ns $DEVELOPER_NAMESPACE
+
+ytt -f ./additional-config/git-secret.yaml -f values.yaml --ignore-unknown-comments | kubectl apply -f-
 
 export DEVELOPER_NAMESPACE=$(cat values.yaml  | grep developer_namespace | awk '/developer_namespace:/ {print $2}')
 export CONTAINER_REGISTRY_HOSTNAME=$(cat values.yaml | grep container_registry -A 3 | awk '/hostname:/ {print $2}')

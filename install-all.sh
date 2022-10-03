@@ -4,6 +4,12 @@ export REPO_WITH_HARBOR_INSTALL=$(cat install-values.yaml | grep install-values 
 export TARGET_OS=$(cat install-values.yaml | grep install-values -A 5 | awk '/target_os:/ {print $2}')
 export VCENTER_PRODUCTION_ENDPOINT=$(cat install-values.yaml | grep install-values -A 5 | awk '/vcenter_production_endpoint:/ {print $2}')
 
+kubectl config delete-context tap-ns 1  > /dev/null 2>&1
+kubectl config delete-context tap-iterate  > /dev/null 2>&1
+kubectl config delete-context tap-build  > /dev/null 2>&1
+kubectl config delete-context tap-test > /dev/null 2>&1
+kubectl config delete-context tap-prod  > /dev/null 2>&1
+
 echo "\n\nInstalling iterate cluster...\n"
 
 export DOMAIN=$(cat values-iterate.yaml  | grep domain | awk '/domain:/ {print $2}')
@@ -37,19 +43,12 @@ sh install-cluster-essentials.sh $TARGET_OS
 
 sh install-iterate.sh $TAP_VERSION
 
-ytt -f ./additional-config/git-secret.yaml -f values.yaml --ignore-unknown-comments | kubectl apply -f-
-
 until [ `kubectl get secret -n tanzu-system-ingress cnr-contour-tls-delegation-cert --ignore-not-found | wc -l | tr -d ' '` = "2" ]; do echo "Waiting for certificates to propagate..."; sleep 10; done
 
 kubectl get secret -n tanzu-system-ingress cnr-contour-tls-delegation-cert -oyaml > tmp.yaml
 
-sed -r 's/cnr-contour-tls-delegation-cert/harbor-tls/' tmp.yaml > tmp2.yaml
+sed -r 's/cnr-contour-tls-delegation-cert/harbor-tls/;s/tanzu-system-ingress/tanzu-system-registry/' tmp.yaml > ./generated/harbor-tls.yaml
 
-sed -r 's/tanzu-system-ingress/tanzu-system-registry/' tmp2.yaml > tmp3.yaml
-
-mv tmp3.yaml ./generated/harbor-tls.yaml
-
-rm tmp2.yaml
 rm tmp.yaml
 
 kubectl create namespace tanzu-system-registry
@@ -71,21 +70,33 @@ tanzu package installed update --install harbor \
     --version 2.3.3+vmware.1-tkg.1 \
     --values-file ./generated/harbor-values.yaml
 
-echo "\n\n Set routing values at Route53 for *.${DOMAIN} and *.apps.${DOMAIN} to: \n\n"  `kubectl get svc envoy -n tanzu-system-ingress -ojson | jq -r '.status.loadBalancer.ingress[0].ip'` "\n\n"
+export EXTERNAL_IP=`kubectl get svc envoy -n tanzu-system-ingress -ojson | jq -r '.status.loadBalancer.ingress[0].ip'`
 
-echo ""
+export AWS_ZONE_ID=$(cat values-iterate.yaml | grep aws: -A 2 | awk '/route_fifty_three_zone_id:/ {print $2}')
 
-read -p "Press enter to continue"
+echo "\n\n Setting routing values for iterate cluster at Route53 for *.${DOMAIN} and *.apps.${DOMAIN} to: \n\n"  ${EXTERNAL_IP} "\n\n"
 
-echo "Create two harbor Projects: apps and build-service. Make sure they are public. "
+sed -r "s/APPS_FQDN/*.apps.${DOMAIN}/;s/ROOT_FQDN/*.${DOMAIN}/;s/INGRESS_IP_ADDRESS/${EXTERNAL_IP}/" route53-template.json > generated/route53-iterate.json
 
-read -p "Press enter to continue"
+export AWS_ACCESS_KEY=$(cat values.yaml | grep aws: -A 5 | awk '/accessKey:/ {print $2}')
+export AWS_SECRET_KEY=$(cat values.yaml | grep aws: -A 5 | awk '/secretKey:/ {print $2}')
+
+AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY AWS_SECRET_ACCESS_KEY=$AWS_SECRET_KEY aws route53 change-resource-record-sets --hosted-zone-id $AWS_ZONE_ID --change-batch file://generated/route53-iterate.json --no-cli-auto-prompt > /dev/null
+
+export CONTAINER_REGISTRY_HOSTNAME=$(cat values.yaml | grep container_registry: -A 4 | awk '/hostname:/ {print $2}')
+export CONTAINER_REGISTRY_USERNAME=$(cat values.yaml | grep container_registry: -A 4 | awk '/username:/ {print $2}')
+export CONTAINER_REGISTRY_PASSWORD=$(cat values.yaml | grep container_registry: -A 4 | awk '/password:/ {print $2}')
+
+until [ "`host $CONTAINER_REGISTRY_HOSTNAME`" = "`echo $CONTAINER_REGISTRY_HOSTNAME has address $EXTERNAL_IP`" ]; do echo "Waiting for DNS cache to be updated..."; sleep 10; done
+
+curl -u "$CONTAINER_REGISTRY_USERNAME:$CONTAINER_REGISTRY_PASSWORD" -H 'content-type: application/json' -v "https://$CONTAINER_REGISTRY_HOSTNAME/api/v2.0/projects" -d '{"project_name": "apps","public": true,"storage_limit": 0}'
+curl -u "$CONTAINER_REGISTRY_USERNAME:$CONTAINER_REGISTRY_PASSWORD" -H 'content-type: application/json' -v "https://$CONTAINER_REGISTRY_HOSTNAME/api/v2.0/projects" -d '{"project_name": "build-service","public": true,"storage_limit": 0}'
 
 tanzu package repository add tbs-full-deps-repository \
-  --url registry.tanzu.vmware.com/tanzu-application-platform/full-tbs-deps-package-repo:1.7.0 \
+  --url registry.tanzu.vmware.com/tanzu-application-platform/full-tbs-deps-package-repo:1.7.1 \
   -n tap-install
 
-tanzu package installed update --install full-tbs-deps -p full-tbs-deps.tanzu.vmware.com -v 1.7.0 -n tap-install
+tanzu package installed update --install full-tbs-deps -p full-tbs-deps.tanzu.vmware.com -v 1.7.1 -n tap-install
 
 ./install-additional-packages.sh
 
@@ -110,6 +121,10 @@ EOF
 kapp -y deploy --app rmq-operator --file https://github.com/rabbitmq/cluster-operator/releases/latest/download/cluster-operator.yml 2> /dev/null
 
 kubectl config set-context --current --namespace=demos
+
+echo "installing git-https..."
+ytt -f ./additional-config/git-secret.yaml -f values.yaml --ignore-unknown-comments | kubectl apply -f-
+
 
 kubectl create namespace service-instances
 
@@ -146,19 +161,18 @@ sh install-cluster-essentials.sh $TARGET_OS
 
 sh install-build.sh $TAP_VERSION
 
-ytt -f ./additional-config/git-secret.yaml -f values.yaml --ignore-unknown-comments | kubectl apply -f-
-
 tanzu package repository add tbs-full-deps-repository \
-  --url registry.tanzu.vmware.com/tanzu-application-platform/full-tbs-deps-package-repo:1.7.0 \
+  --url registry.tanzu.vmware.com/tanzu-application-platform/full-tbs-deps-package-repo:1.7.1 \
   -n tap-install
 
-tanzu package installed update --install full-tbs-deps -p full-tbs-deps.tanzu.vmware.com -v 1.7.0 -n tap-install
+tanzu package installed update --install full-tbs-deps -p full-tbs-deps.tanzu.vmware.com -v 1.7.1 -n tap-install
 
 kubectl config set-context --current --namespace=demos
 
 kubectl apply -f ./additional-config/scan-policy.yaml
 kubectl apply -f ./additional-config/tekton-pipeline.yaml
 kubectl apply -f ./additional-config/tap-gui-viewer-service-account-rbac.yaml
+ytt -f ./additional-config/git-secret.yaml -f values.yaml --ignore-unknown-comments | kubectl apply -f-
 
 CLUSTER_URL=$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}')
 
@@ -210,11 +224,17 @@ until [ `kubectl get secret -n tanzu-system-ingress cnr-contour-tls-delegation-c
 
 export DOMAIN=$(cat values-view.yaml  | grep domain | awk '/domain:/ {print $2}')
 
-echo "\n\n Set routing values at Route53 for *.${DOMAIN} to: \n\n"  `kubectl get svc envoy -n tanzu-system-ingress -ojson | jq -r '.status.loadBalancer.ingress[0].ip'` "\n\n"
+export EXTERNAL_IP=`kubectl get svc envoy -n tanzu-system-ingress -ojson | jq -r '.status.loadBalancer.ingress[0].ip'`
 
-echo ""
+echo "\n\n Setting routing values for view cluster at Route53 for *.${DOMAIN} to: \n\n"  ${EXTERNAL_IP} "\n\n"
 
-read -p "Press enter to continue"
+sed -r "s/APPS_FQDN/*.apps.${DOMAIN}/;s/ROOT_FQDN/*.${DOMAIN}/;s/INGRESS_IP_ADDRESS/${EXTERNAL_IP}/" route53-template.json > generated/route53-view.json
+
+export AWS_ZONE_ID=$(cat values-view.yaml | grep aws: -A 2 | awk '/route_fifty_three_zone_id:/ {print $2}')
+export AWS_ACCESS_KEY=$(cat values.yaml | grep aws: -A 5 | awk '/accessKey:/ {print $2}')
+export AWS_SECRET_KEY=$(cat values.yaml | grep aws: -A 5 | awk '/secretKey:/ {print $2}')
+
+AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY AWS_SECRET_ACCESS_KEY=$AWS_SECRET_KEY aws route53 change-resource-record-sets --hosted-zone-id  $AWS_ZONE_ID --change-batch file://generated/route53-view.json --no-cli-auto-prompt > /dev/null
 
 CA_CERT=$(kubectl get secret -n metadata-store ingress-cert -o json | jq -r ".data.\"ca.crt\"")
 
@@ -316,11 +336,17 @@ runclusters:
     token: ${CLUSTER_TOKEN}
 EOF
 
-echo "\n\n Set routing values at Route53 for *.${DOMAIN} and *.apps.${DOMAIN} to: \n\n"  `kubectl get svc envoy -n tanzu-system-ingress -ojson | jq -r '.status.loadBalancer.ingress[0].ip'` "\n\n"
+export EXTERNAL_IP=`kubectl get svc envoy -n tanzu-system-ingress -ojson | jq -r '.status.loadBalancer.ingress[0].ip'`
 
-echo ""
+echo "\n\n Setting routing values for test cluster at Route53 for *.${DOMAIN} and *.apps.${DOMAIN} to: \n\n"  ${EXTERNAL_IP} "\n\n"
 
-read -p "Press enter to continue"
+sed -r "s/APPS_FQDN/*.apps.${DOMAIN}/;s/ROOT_FQDN/*.${DOMAIN}/;s/INGRESS_IP_ADDRESS/${EXTERNAL_IP}/" route53-template.json > generated/route53-test.json
+
+export AWS_ZONE_ID=$(cat values-test.yaml | grep aws: -A 2 | awk '/route_fifty_three_zone_id:/ {print $2}')
+export AWS_ACCESS_KEY=$(cat values.yaml | grep aws: -A 5 | awk '/accessKey:/ {print $2}')
+export AWS_SECRET_KEY=$(cat values.yaml | grep aws: -A 5 | awk '/secretKey:/ {print $2}')
+
+AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY AWS_SECRET_ACCESS_KEY=$AWS_SECRET_KEY aws route53 change-resource-record-sets --hosted-zone-id $AWS_ZONE_ID --change-batch file://generated/route53-test.json --no-cli-auto-prompt > /dev/null
 
 kubectl vsphere login \
 --server $VCENTER_ENDPOINT \
@@ -395,11 +421,17 @@ runclusters:
     token: ${CLUSTER_TOKEN}
 EOF
 
-  echo "\n\n Set routing values at Route53 for *.${DOMAIN} and *.apps.${DOMAIN} to: \n\n"  `kubectl get svc envoy -n tanzu-system-ingress -ojson | jq -r '.status.loadBalancer.ingress[0].ip'` "\n\n"
+  export EXTERNAL_IP=`kubectl get svc envoy -n tanzu-system-ingress -ojson | jq -r '.status.loadBalancer.ingress[0].ip'`
 
-  echo ""
+  echo "\n\n Setting routing values for production cluster at Route53 for *.${DOMAIN} and *.apps.${DOMAIN} to: \n\n"  ${EXTERNAL_IP} "\n\n"
 
-  read -p "Press enter to continue"
+  sed -r "s/APPS_FQDN/*.apps.${DOMAIN}/;s/ROOT_FQDN/*.${DOMAIN}/;s/INGRESS_IP_ADDRESS/${EXTERNAL_IP}/" route53-template.json > generated/route53-prod.json
+
+  export AWS_ZONE_ID=$(cat values-prod.yaml | grep aws: -A 2 | awk '/route_fifty_three_zone_id:/ {print $2}')
+  export AWS_ACCESS_KEY=$(cat values.yaml | grep aws: -A 5 | awk '/accessKey:/ {print $2}')
+  export AWS_SECRET_KEY=$(cat values.yaml | grep aws: -A 5 | awk '/secretKey:/ {print $2}')
+
+  AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY AWS_SECRET_ACCESS_KEY=$AWS_SECRET_KEY aws route53 change-resource-record-sets --hosted-zone-id $AWS_ZONE_ID --change-batch file://generated/route53-prod.json --no-cli-auto-prompt > /dev/null
 
   kubectl vsphere login \
   --server $VCENTER_ENDPOINT \

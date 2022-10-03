@@ -90,7 +90,7 @@ cat <<EOF > values-iterate.yaml
 ---
 ingress:
   domain: $ITERATE_DOMAIN
-  tap-gui-domain: $VIEW_DOMAIN
+  tap_gui_domain: $VIEW_DOMAIN
 aws:
   route_fifty_three_zone_id: $ITERATE_ZONE_ID
 EOF

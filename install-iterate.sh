@@ -6,6 +6,12 @@ export INSTALL_REGISTRY_HOSTNAME=registry.tanzu.vmware.com
 export INSTALL_REGISTRY_USERNAME=$(cat values.yaml | grep tanzunet -A 3 | awk '/username:/ {print $2}')
 export INSTALL_REGISTRY_PASSWORD=$(cat values.yaml  | grep tanzunet -A 3 | awk '/password:/ {print $2}')
 
+kubectl run  nginx --image=nginx --wait && kubectl wait pod nginx --for condition=Ready --timeout=90s
+kubectl exec -it nginx -- curl registry.tanzu.vmware.com
+kubectl exec -it nginx -- curl registry.tanzu.vmware.com
+kubectl exec -it nginx -- curl registry.tanzu.vmware.com
+kubectl delete pod nginx
+
 kubectl create ns tap-install
 tanzu secret registry add tap-registry \
   --username ${INSTALL_REGISTRY_USERNAME} --password ${INSTALL_REGISTRY_PASSWORD} \

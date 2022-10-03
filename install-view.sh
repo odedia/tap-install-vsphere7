@@ -6,6 +6,12 @@ export INSTALL_REGISTRY_HOSTNAME=registry.tanzu.vmware.com
 export INSTALL_REGISTRY_USERNAME=$(cat values.yaml | grep tanzunet -A 3 | awk '/username:/ {print $2}')
 export INSTALL_REGISTRY_PASSWORD=$(cat values.yaml  | grep tanzunet -A 3 | awk '/password:/ {print $2}')
 
+kubectl run  nginx --image=nginx --wait && kubectl wait pod nginx --for condition=Ready --timeout=90s
+kubectl exec -it nginx -- curl registry.tanzu.vmware.com
+kubectl exec -it nginx -- curl registry.tanzu.vmware.com
+kubectl exec -it nginx -- curl registry.tanzu.vmware.com
+kubectl delete pod nginx
+
 kubectl create ns tap-install
 tanzu secret registry add tap-registry \
   --username ${INSTALL_REGISTRY_USERNAME} --password ${INSTALL_REGISTRY_PASSWORD} \
@@ -16,7 +22,7 @@ tanzu package repository add tanzu-tap-repository \
   --namespace tap-install
 tanzu package repository get tanzu-tap-repository --namespace tap-install
 
-ytt -f tap-values-view.yaml -f values.yaml -f values-view.yaml -f run-cluster-build.yaml -f run-cluster-iterate.yaml  --ignore-unknown-comments > generated/tap-values-view.yaml
+ytt -f tap-values-view.yaml -f values.yaml -f values-view.yaml -f generated/run-cluster-build.yaml -f generated/run-cluster-iterate.yaml  --ignore-unknown-comments > generated/tap-values-view.yaml
 
 tanzu package installed update --install tap -p tap.tanzu.vmware.com -v $1 --values-file generated/tap-values-view.yaml -n tap-install
 

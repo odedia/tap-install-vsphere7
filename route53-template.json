@@ -1,0 +1,20 @@
+{
+"Comment": "UPSERTING",
+ "Changes": [ {
+	"Action": "UPSERT",
+	"ResourceRecordSet": {
+	    "Name": "APPS_FQDN",
+	        "Type": "A",
+	         "TTL": 300,
+	      "ResourceRecords": [{"Value": "INGRESS_IP_ADDRESS"}]
+	}},
+	{
+	"Action": "UPSERT",
+	"ResourceRecordSet": {
+	    "Name": "ROOT_FQDN",
+	        "Type": "A",
+	         "TTL": 300,
+	      "ResourceRecords": [{"Value": "INGRESS_IP_ADDRESS"}]
+	}}
+]
+}

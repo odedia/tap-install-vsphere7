@@ -5,7 +5,7 @@ tanzunet:
   password: password
 ingress:
   domain: from-overlay
-  tap-gui-domain: view.mysite.com
+  tap_gui_domain: view.mysite.com
   contour_tls_namespace: tanzu-system-ingress
   contour_tls_secret: contour-tls-delegation-cert
 aws:

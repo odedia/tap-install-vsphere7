@@ -13,8 +13,8 @@ buildservice:
 
 supply_chain: basic
 
-api-auto-registration:
-  tap_gui_url: #@ "https://tap-gui.{}".format(data.values.ingress.tap-gui-domain)
+api_auto_registration:
+  tap_gui_url: #@ "https://tap-gui.{}".format(data.values.ingress.tap_gui_domain)
   cluster_name: iterate-cluster
 
 appsso:
@@ -47,5 +47,6 @@ grype:
 appliveview_connector:
   backend:
     sslDisabled: "true"
-    host: #@ "appliveview.view.{}".format(data.values.ingress.domain)
+    ingressEnabled: true
+    host: #@ "appliveview.{}".format(data.values.ingress.tap_gui_domain)
     port: "80"

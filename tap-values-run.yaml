@@ -22,7 +22,7 @@ appliveview:
 appliveview_connector:
   backend:
     sslDisabled: "true"
-    host: #@ "appliveview.{}.format(data.values.ingress.tap-gui-domain)
+    host: #@ "appliveview.{}".format(data.values.ingress.tap_gui_domain)
     port: "80"
 
 appsso:
